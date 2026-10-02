@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Real-Time Course Live Feed | Partnr Learning Platform</title>
+  <meta name="description" content="High-performance real-time course comment feed powered by WebSockets, MongoDB, and Redis Pub/Sub.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Top Navigation Header -->
+    <header class="app-header">
+      <div class="header-container">
+        <div class="brand">
+          <div class="brand-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
+            </svg>
+          </div>
+          <div class="brand-text">
+            <span class="brand-title">Partnr Stream</span>
+            <span class="brand-tag">Real-Time</span>
+          </div>
+        </div>
+
+        <!-- Course Selector Bar -->
+        <div class="course-selector-bar">
+          <label for="course-select" class="selector-label">Course:</label>
+          <div class="select-wrapper">
+            <select id="course-select" class="course-select">
+              <option value="course-101">CS 101: Distributed Systems Architecture</option>
+              <option value="course-202">CS 202: High-Throughput Event Streaming</option>
+              <option value="course-303">CS 303: NoSQL Database Engineering</option>
+              <option value="custom">Custom Course ID...</option>
+            </select>
+          </div>
+          <input type="text" id="custom-course-input" class="custom-course-input hidden" placeholder="Enter courseId" />
+        </div>
+
+        <!-- Connection and User Controls -->
+        <div class="header-actions">
+          <div id="ws-status" class="status-badge connecting">
+            <span class="status-dot"></span>
+            <span id="ws-status-text" class="status-label">Connecting...</span>
+          </div>
+
+          <div class="user-profile-badge">
+            <div id="user-avatar" class="user-avatar">TU</div>
+            <div class="user-info">
+              <span class="user-name-label">Posting as</span>
+              <input type="text" id="user-id-input" class="user-id-field" value="user_tarun" title="Change your User ID" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content Grid -->
+    <main class="main-content">
+      <div class="content-container">
+        <!-- Course Stage / Live Stream Simulation Card -->
+        <section class="course-stage">
+          <div class="stage-media">
+            <div class="media-overlay">
+              <div class="live-pill">
+                <span class="live-pulse"></span> LIVE SESSION
+              </div>
+              <h1 id="current-course-title" class="stage-title">CS 101: Distributed Systems Architecture</h1>
+              <p class="stage-subtitle">Module 4: Horizontal Scaling with Redis Pub/Sub & WebSockets</p>
+            </div>
+            <div class="media-placeholder">
+              <div class="video-mock">
+                <div class="play-indicator">
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+                    <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                  </svg>
+                </div>
+                <div class="mock-timeline">
+                  <div class="timeline-fill"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Architecture Info Banner -->
+          <div class="architecture-pills">
+            <div class="tech-pill">
+              <span class="dot-indigo"></span>
+              <span>WebSockets <small>(/ws/courses/:id)</small></span>
+            </div>
+            <div class="tech-pill">
+              <span class="dot-green"></span>
+              <span>MongoDB <small>({ courseId: 1, createdAt: -1 })</small></span>
+            </div>
+            <div class="tech-pill">
+              <span class="dot-red"></span>
+              <span>Redis Pub/Sub <small>(course:*:comments)</small></span>
+            </div>
+            <div class="tech-pill latency-pill">
+              <span class="dot-yellow"></span>
+              <span>Delivery: <strong id="latency-metric">&lt; 50ms</strong></span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Live Discussion Sidebar / Feed -->
+        <section class="feed-section">
+          <div class="feed-header">
+            <div class="feed-title-wrap">
+              <h2 class="feed-title">Live Discussion</h2>
+              <span id="comment-count-badge" class="count-badge">0 comments</span>
+            </div>
+            <button id="refresh-btn" class="refresh-btn" title="Refetch historical comments">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
+              </svg>
+              <span>Sync</span>
+            </button>
+          </div>
+
+          <!-- Comment List Container (REQUIRED: data-testid="comment-list") -->
+          <div class="comment-list-scroll-area">
+            <div id="comment-list" data-testid="comment-list" class="comment-list">
+              <!-- Dynamically populated comments -->
+              <div id="feed-loading" class="feed-loading">
+                <div class="spinner"></div>
+                <p>Loading course conversation...</p>
+              </div>
+            </div>
+            <div id="empty-state" class="empty-state hidden">
+              <div class="empty-icon">💬</div>
+              <p class="empty-title">No comments yet</p>
+              <p class="empty-desc">Be the first to ask a question or share your thoughts!</p>
+            </div>
+          </div>
+
+          <!-- Comment Input Box Form -->
+          <div class="comment-input-card">
+            <form id="comment-form" class="comment-form" onsubmit="return false;">
+              <div class="input-wrapper">
+                <!-- REQUIRED: data-testid="comment-input" -->
+                <textarea
+                  id="comment-input"
+                  data-testid="comment-input"
+                  class="comment-input"
+                  placeholder="Share a question or point with the class..."
+                  rows="2"
+                  maxlength="500"
+                  required
+                ></textarea>
+              </div>
+
+              <div class="form-footer">
+                <div class="char-counter">
+                  <span id="char-count">0</span> / 500
+                </div>
+
+                <!-- REQUIRED: data-testid="comment-submit" -->
+                <button
+                  type="submit"
+                  id="comment-submit"
+                  data-testid="comment-submit"
+                  class="submit-button"
+                >
+                  <span class="btn-text">Post Comment</span>
+                  <svg class="send-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                  </svg>
+                </button>
+              </div>
+            </form>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <script src="ws-client.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
